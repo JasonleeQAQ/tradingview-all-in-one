@@ -1,0 +1,426 @@
+//@version=6
+indicator('综合交易指标', overlay = true, max_boxes_count = 500, max_lines_count = 500, max_labels_count = 500, scale = scale.right, dynamic_requests = true)
+
+// ===== 自定义类型 =====
+type srInfo
+	int startTime
+	float price
+	string srType
+	int strength
+	string timeframeStr
+	bool ephemeral = false
+	int breakTime
+	array<int> retestTimes
+
+type srObj
+	srInfo info
+	bool startFixed
+	bool breakFixed
+	bool rendered
+	string combinedTimeframeStr
+	box srBox
+	label breakLabel
+	array<label> retestLabels
+
+type barInfo
+	int t
+	int tc
+	float c
+	float h
+	float l
+
+// ===== 主图常用指标 =====
+g_main_indicators = '📊 主图常用指标'
+
+// 均线组 (4条线)
+enable_ma_group = input.bool(true, '启用均线组', group = g_main_indicators)
+show_ma1 = input.bool(true, '', group = g_main_indicators, inline = 'ma1') and enable_ma_group
+ma1_type = input.string('EMA', 'MA #1', group = g_main_indicators, inline = 'ma1', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+ma1_source = input.source(close, '', group = g_main_indicators, inline = 'ma1')
+ma1_length = input.int(5, '', group = g_main_indicators, inline = 'ma1', minval = 1)
+ma1_color = input.color(color.red, '', group = g_main_indicators, inline = 'ma1')
+
+show_ma2 = input.bool(true, '', group = g_main_indicators, inline = 'ma2') and enable_ma_group
+ma2_type = input.string('EMA', 'MA #2', group = g_main_indicators, inline = 'ma2', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+ma2_source = input.source(close, '', group = g_main_indicators, inline = 'ma2')
+ma2_length = input.int(21, '', group = g_main_indicators, inline = 'ma2', minval = 1)
+ma2_color = input.color(color.yellow, '', group = g_main_indicators, inline = 'ma2')
+
+show_ma3 = input.bool(true, '', group = g_main_indicators, inline = 'ma3') and enable_ma_group
+ma3_type = input.string('EMA', 'MA #3', group = g_main_indicators, inline = 'ma3', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+ma3_source = input.source(close, '', group = g_main_indicators, inline = 'ma3')
+ma3_length = input.int(55, '', group = g_main_indicators, inline = 'ma3', minval = 1)
+ma3_color = input.color(color.blue, '', group = g_main_indicators, inline = 'ma3')
+
+show_ma4 = input.bool(false, '', group = g_main_indicators, inline = 'ma4') and enable_ma_group
+ma4_type = input.string('EMA', 'MA #4', group = g_main_indicators, inline = 'ma4', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+ma4_source = input.source(close, '', group = g_main_indicators, inline = 'ma4')
+ma4_length = input.int(144, '', group = g_main_indicators, inline = 'ma4', minval = 1)
+ma4_color = input.color(color.green, '', group = g_main_indicators, inline = 'ma4')
+
+// Vegas通道 (5条线)
+enable_vegas_group = input.bool(true, '启用Vegas通道', group = g_main_indicators)
+show_vegas1 = input.bool(true, '', group = g_main_indicators, inline = 'vegas1') and enable_vegas_group
+vegas1_type = input.string('EMA', 'Vegas #1', group = g_main_indicators, inline = 'vegas1', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+vegas1_source = input.source(close, '', group = g_main_indicators, inline = 'vegas1')
+vegas1_length = input.int(12, '', group = g_main_indicators, inline = 'vegas1', minval = 1)
+vegas1_color = input.color(color.orange, '', group = g_main_indicators, inline = 'vegas1')
+
+show_vegas2 = input.bool(true, '', group = g_main_indicators, inline = 'vegas2') and enable_vegas_group
+vegas2_type = input.string('EMA', 'Vegas #2', group = g_main_indicators, inline = 'vegas2', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+vegas2_source = input.source(close, '', group = g_main_indicators, inline = 'vegas2')
+vegas2_length = input.int(144, '', group = g_main_indicators, inline = 'vegas2', minval = 1)
+vegas2_color = input.color(color.purple, '', group = g_main_indicators, inline = 'vegas2')
+
+show_vegas3 = input.bool(true, '', group = g_main_indicators, inline = 'vegas3') and enable_vegas_group
+vegas3_type = input.string('EMA', 'Vegas #3', group = g_main_indicators, inline = 'vegas3', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+vegas3_source = input.source(close, '', group = g_main_indicators, inline = 'vegas3')
+vegas3_length = input.int(169, '', group = g_main_indicators, inline = 'vegas3', minval = 1)
+vegas3_color = input.color(color.lime, '', group = g_main_indicators, inline = 'vegas3')
+
+show_vegas4 = input.bool(true, '', group = g_main_indicators, inline = 'vegas4') and enable_vegas_group
+vegas4_type = input.string('EMA', 'Vegas #4', group = g_main_indicators, inline = 'vegas4', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+vegas4_source = input.source(close, '', group = g_main_indicators, inline = 'vegas4')
+vegas4_length = input.int(576, '', group = g_main_indicators, inline = 'vegas4', minval = 1)
+vegas4_color = input.color(color.aqua, '', group = g_main_indicators, inline = 'vegas4')
+
+show_vegas5 = input.bool(true, '', group = g_main_indicators, inline = 'vegas5') and enable_vegas_group
+vegas5_type = input.string('EMA', 'Vegas #5', group = g_main_indicators, inline = 'vegas5', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'])
+vegas5_source = input.source(close, '', group = g_main_indicators, inline = 'vegas5')
+vegas5_length = input.int(676, '', group = g_main_indicators, inline = 'vegas5', minval = 1)
+vegas5_color = input.color(color.fuchsia, '', group = g_main_indicators, inline = 'vegas5')
+
+// ZigZag指标 - 严格按照原代码移植
+enable_zigzag = input.bool(true, '启用ZigZag指标', group = g_main_indicators)
+prd = input.int(defval = 9, title = 'ZigZag Period', minval = 2, maxval = 50, group = g_main_indicators)
+showzigzag = input(defval = true, title = 'Show Zig Zag', group = g_main_indicators)
+showfibo = input(defval = false, title = 'Show Fibonacci Ratios', group = g_main_indicators)
+labelcol = input(defval = color.blue, title = 'Text Color for Fibo Levels', group = g_main_indicators)
+fibolinecol = input(defval = color.lime, title = 'Line Color for Fibo Levels', group = g_main_indicators)
+upcol = input.color(defval = color.lime, title = 'Zigzag Colors', inline = 'zzcol', group = g_main_indicators)
+dncol = input.color(defval = color.red, title = '', inline = 'zzcol', group = g_main_indicators)
+labelloc = input.string(defval = 'Right', title = 'Label Location', options = ['Left', 'Right'], group = g_main_indicators)
+enable236 = input(defval = true, title = 'Enable Level 0.236', group = g_main_indicators)
+enable382 = input(defval = true, title = 'Enable Level 0.382', group = g_main_indicators)
+enable500 = input(defval = true, title = 'Enable Level 0.500', group = g_main_indicators)
+enable618 = input(defval = true, title = 'Enable Level 0.618', group = g_main_indicators)
+enable786 = input(defval = true, title = 'Enable Level 0.786', group = g_main_indicators)
+
+// ===== 警报设置 =====
+g_alerts = '🔔 警报设置'
+enable_divergence_alerts = input.bool(true, '启用背离信号警报', group = g_alerts)
+enable_sr_break_retest_alerts = input.bool(false, '启用支撑阻力突破/重测警报', group = g_alerts)
+enable_ma_alignment_alerts = input.bool(false, '启用均线排列警报', group = g_alerts)
+enable_vegas_alignment_alerts = input.bool(false, '启用Vegas排列警报', group = g_alerts)
+
+// ===== RSI / SR / TF / 其他 =====
+rsi_length = input.int(14, 'RSI长度', minval = 1)
+rsi_source = input.source(close, 'RSI数据源')
+overbought = input.int(70, '超买线', minval = 50, maxval = 100)
+oversold = input.int(30, '超卖线', minval = 0, maxval = 50)
+midline = input.int(50, '中线', minval = 30, maxval = 70)
+
+srPivotLength = input.int(15, '支撑阻力pivot长度', minval = 3, maxval = 50, group = '支撑阻力')
+srStrength = input.int(1, '强度要求', options = [1, 2, 3], group = '支撑阻力')
+srInvalidation = input.string('Close', '失效模式', options = ['Wick', 'Close'], group = '支撑阻力')
+showInvalidated = input.bool(true, '显示已失效', group = '支撑阻力')
+zoneSize = input.float(1.0, '区域宽度', minval = 0.1, maxval = 10, step = 0.1, group = '支撑阻力')
+showBreaks = input.bool(false, '显示突破', group = '支撑阻力')
+showRetests = input.bool(false, '显示重测', group = '支撑阻力')
+expandZones = input.string('Only Valid', '扩展区域', options = ['All', 'Only Valid', 'None'], group = '支撑阻力')
+
+timeframe1Enabled = input.bool(true, title = '', group = '时间框架', inline = 'timeframe1')
+timeframe1 = input.timeframe('', title = '当前时间框架', group = '时间框架', inline = 'timeframe1')
+timeframe2Enabled = input.bool(false, title = '', group = '时间框架', inline = 'timeframe2')
+timeframe2 = input.timeframe('D', title = '日线', group = '时间框架', inline = 'timeframe2')
+timeframe3Enabled = input.bool(false, title = '', group = '时间框架', inline = 'timeframe3')
+timeframe3 = input.timeframe('W', title = '周线', group = '时间框架', inline = 'timeframe3')
+
+show_boxes = input.bool(true, '箱体', group = '箱体')
+box_length = input.int(20, 'Minimum Range Length', minval = 2, group = '箱体')
+box_mult = input.float(1.0, 'Range Width', minval = 0, step = 0.1, group = '箱体')
+box_atrLen = input.int(500, 'ATR Length', minval = 1, group = '箱体')
+upCss = input.color(#089981, 'Broken Upward', group = '箱体', inline = 'box_colors')
+dnCss = input.color(#f23645, 'Broken Downward', group = '箱体', inline = 'box_colors')
+unbrokenCss = input.color(#2157f3, 'Unbroken', group = '箱体', inline = 'box_colors')
+show_range_lines = input.bool(false, '显示延长线', group = '箱体')
+
+atr_period = input.int(14, 'ATR周期', minval = 1)
+atr_multiplier = input.float(1.0, 'ATR倍数', minval = 0.1, maxval = 5.0, step = 0.1)
+
+enable_div_signals = input.bool(true, '启用背离信号', group = 'RSI背离设置')
+div_len = input.int(14, title = 'RSI Period', group = 'RSI背离设置')
+div_lbR = input.int(5, 'Pivot Lookback Right', minval = 1, maxval = 20, group = 'RSI背离设置')
+div_lbL = input.int(5, 'Pivot Lookback Left', minval = 1, maxval = 20, group = 'RSI背离设置')
+div_rangeUpper = input.int(60, 'Max of Lookback Range', minval = 10, maxval = 100, group = 'RSI背离设置')
+div_rangeLower = input.int(5, 'Min of Lookback Range', minval = 1, maxval = 50, group = 'RSI背离设置')
+div_plotBull = input.bool(true, 'Plot Bullish', group = 'RSI背离设置')
+div_plotBear = input.bool(true, 'Plot Bearish', group = 'RSI背离设置')
+
+support_color = input.color(#08998180, '支撑区域颜色', group = '颜色')
+resistance_color = input.color(#f2364580, '阻力区域颜色', group = '颜色')
+bullish_color = input.color(color.green, '看涨颜色', group = '颜色')
+bearish_color = input.color(color.red, '看跌颜色', group = '颜色')
+breakColor = input.color(color.blue, '突破颜色', group = '颜色')
+textColor = input.color(#ffffff80, '文字颜色', group = '颜色')
+
+// ===== ZigZag变量和逻辑（严格按照原代码移植） =====
+var fibo_ratios = array.new_float(0)
+var shownlevels = 1
+if barstate.isfirst and enable_zigzag
+    array.push(fibo_ratios, 0.000)
+    if enable236
+        array.push(fibo_ratios, 0.236)
+        shownlevels := shownlevels + 1
+        shownlevels
+    if enable382
+        array.push(fibo_ratios, 0.382)
+        shownlevels := shownlevels + 1
+        shownlevels
+    if enable500
+        array.push(fibo_ratios, 0.500)
+        shownlevels := shownlevels + 1
+        shownlevels
+    if enable618
+        array.push(fibo_ratios, 0.618)
+        shownlevels := shownlevels + 1
+        shownlevels
+    if enable786
+        array.push(fibo_ratios, 0.786)
+        shownlevels := shownlevels + 1
+        shownlevels
+    for x = 1 to 5 by 1
+        array.push(fibo_ratios, x)
+        array.push(fibo_ratios, x + 0.272)
+        array.push(fibo_ratios, x + 0.414)
+        array.push(fibo_ratios, x + 0.618)
+
+// 预先计算最高/最低点
+ph = ta.highestbars(high, prd) == 0 ? high : na
+pl = ta.lowestbars(low, prd) == 0 ? low : na
+
+var dir = 0
+iff_1 = bool(pl) and na(ph) ? -1 : dir
+dir := bool(ph) and na(pl) ? 1 : iff_1
+var max_array_size = 10
+var zigzag = array.new_float(0)
+oldzigzag = array.copy(zigzag)
+
+add_to_zigzag(value, bindex) =>
+    array.unshift(zigzag, bindex)
+    array.unshift(zigzag, value)
+    if array.size(zigzag) > max_array_size
+        array.pop(zigzag)
+        array.pop(zigzag)
+
+update_zigzag(value, bindex) =>
+    if array.size(zigzag) == 0
+        add_to_zigzag(value, bindex)
+    else
+        if dir == 1 and value > array.get(zigzag, 0) or dir == -1 and value < array.get(zigzag, 0)
+            array.set(zigzag, 0, value)
+            array.set(zigzag, 1, bindex)
+        0.
+
+bool dirchanged = dir != dir[1]
+if enable_zigzag and (bool(ph) or bool(pl))
+    if dirchanged
+        add_to_zigzag(dir == 1 ? ph : pl, bar_index)
+    else
+        update_zigzag(dir == 1 ? ph : pl, bar_index)
+
+if enable_zigzag and showzigzag and array.size(zigzag) >= 4 and array.size(oldzigzag) >= 4
+    var line zzline = na
+    if array.get(zigzag, 0) != array.get(oldzigzag, 0) or array.get(zigzag, 1) != array.get(oldzigzag, 1)
+        if array.get(zigzag, 2) == array.get(oldzigzag, 2) and array.get(zigzag, 3) == math.round(array.get(oldzigzag, 3))
+            line.delete(zzline)
+        zzline := line.new(x1 = math.round(array.get(zigzag, 1)), y1 = array.get(zigzag, 0), x2 = math.round(array.get(zigzag, 3)), y2 = array.get(zigzag, 2), color = dir == 1 ? upcol : dncol, width = 2)
+        zzline
+
+var fibolines = array.new_line(0)
+var fibolabels = array.new_label(0)
+if enable_zigzag and showfibo and array.size(zigzag) >= 6 and barstate.islast
+    if array.size(fibolines) > 0
+        for x = 0 to array.size(fibolines) - 1 by 1
+            line.delete(array.get(fibolines, x))
+            label.delete(array.get(fibolabels, x))
+
+    diff = array.get(zigzag, 4) - array.get(zigzag, 2)
+    stopit = false
+    for x = 0 to array.size(fibo_ratios) - 1 by 1
+        if stopit and x > shownlevels
+            break
+        array.unshift(fibolines, line.new(x1 = math.round(array.get(zigzag, 5)), y1 = array.get(zigzag, 2) + diff * array.get(fibo_ratios, x), x2 = bar_index, y2 = array.get(zigzag, 2) + diff * array.get(fibo_ratios, x), color = fibolinecol, extend = extend.right))
+        label_x_loc = labelloc == 'Left' ? math.round(array.get(zigzag, 5)) - 1 : bar_index + 15
+        array.unshift(fibolabels, label.new(x = label_x_loc, y = array.get(zigzag, 2) + diff * array.get(fibo_ratios, x), text = str.tostring(array.get(fibo_ratios, x), '#.###') + '(' + str.tostring(math.round_to_mintick(array.get(zigzag, 2) + diff * array.get(fibo_ratios, x))) + ')', textcolor = labelcol, style = label.style_none))
+        if dir == 1 and array.get(zigzag, 2) + diff * array.get(fibo_ratios, x) > array.get(zigzag, 0) or dir == -1 and array.get(zigzag, 2) + diff * array.get(fibo_ratios, x) < array.get(zigzag, 0)
+            stopit := true
+            stopit
+
+// ===== 均线函数 =====
+ma(source, length, MAtype) =>
+    switch MAtype
+        'SMA' => ta.sma(source, length)
+        'EMA' => ta.ema(source, length)
+        'SMMA (RMA)' => ta.rma(source, length)
+        'WMA' => ta.wma(source, length)
+        'VWMA' => ta.vwma(source, length)
+        => na
+
+// ===== 计算均线值 =====
+ma1_value = show_ma1 ? ma(ma1_source, ma1_length, ma1_type) : na
+ma2_value = show_ma2 ? ma(ma2_source, ma2_length, ma2_type) : na
+ma3_value = show_ma3 ? ma(ma3_source, ma3_length, ma3_type) : na
+ma4_value = show_ma4 ? ma(ma4_source, ma4_length, ma4_type) : na
+
+vegas1_value = show_vegas1 ? ma(vegas1_source, vegas1_length, vegas1_type) : na
+vegas2_value = show_vegas2 ? ma(vegas2_source, vegas2_length, vegas2_type) : na
+vegas3_value = show_vegas3 ? ma(vegas3_source, vegas3_length, vegas3_type) : na
+vegas4_value = show_vegas4 ? ma(vegas4_source, vegas4_length, vegas4_type) : na
+vegas5_value = show_vegas5 ? ma(vegas5_source, vegas5_length, vegas5_type) : na
+
+// ===== 预声明 =====
+var float max = na
+var float min = na
+var int os = 0
+
+// ===== SR常量/基础指标 =====
+const int maxSRInfoListSize = 10
+const int maxBarInfoListSize = 3000
+const int maxDistanceToLastBar = 500
+const int minSRSize = 5
+const int retestLabelCooldown = 3
+const float tooCloseATR = 1.0 / 8.0
+const int labelOffsetBars = 20
+const int atrLen = 20
+const bool fixSRs = true
+const bool fixRetests = false
+
+float atr = ta.atr(atrLen)
+float atr_value = ta.atr(atr_period)
+float current_atr_high = high + atr_value * atr_multiplier
+float current_atr_low = low - atr_value * atr_multiplier
+float rsi = ta.rsi(rsi_source, rsi_length)
+float ema200 = ta.ema(close, 200)
+float ema200_smoothed = ta.ema(ema200, 10)
+float zoneSizeATR = zoneSize * 0.075
+var int curTFMS = timeframe.in_seconds(timeframe.period) * 1000
+bool insideBounds = bar_index > last_bar_index - maxDistanceToLastBar
+
+// ===== 容器/警报状态 =====
+var allSRList = array.new<srObj>()
+var allSRInfoList = array.new<srInfo>()
+var barInfoList = array.new<barInfo>()
+var map<string, bool> alerts = map.new<string, bool>()
+var bool prev_confirmed_div_buy = false
+var bool prev_confirmed_div_sell = false
+
+// 均线组警报状态
+var bool prev_ma_bullish_alignment = false
+var bool prev_ma_bearish_alignment = false
+var bool prev_vegas_bullish_alignment = false
+var bool prev_vegas_bearish_alignment = false
+
+if barstate.isfirst
+    alerts.put('Retest', false)
+    alerts.put('Break', false)
+    alerts.put('DivBuy', false)
+    alerts.put('DivSell', false)
+
+// ===== 工具函数（SR渲染等） =====
+formatTimeframeString(string formatTimeframe, bool short = false) =>
+    string timeframeF = formatTimeframe == '' ? timeframe.period : formatTimeframe
+    if str.contains(timeframeF, 'D') or str.contains(timeframeF, 'W') or str.contains(timeframeF, 'S') or str.contains(timeframeF, 'M')
+        timeframe.from_seconds(timeframe.in_seconds(timeframeF))
+    else
+        int seconds = timeframe.in_seconds(timeframeF)
+        if seconds >= 3600
+            int hourCount = int(seconds / 3600)
+            string result = short ? str.tostring(hourCount) + 'h' : str.tostring(hourCount) + ' Hour' + (hourCount > 1 ? 's' : '')
+            result
+        else
+            string result = short ? timeframeF + 'm' : timeframeF + ' Min'
+            result
+
+findValRtnTime(array<barInfo> biList, valToFind, toSearch, searchMode, minTime, maxTime, int defVal = na) =>
+    int rtnTime = defVal
+    float minDiff = na
+    if biList.size() > 0
+        for i = biList.size() - 1 to 0 by 1
+            curBI = biList.get(i)
+            if curBI.t >= minTime and curBI.t < maxTime
+                toLook = toSearch == 'Low' ? curBI.l : toSearch == 'High' ? curBI.h : curBI.c
+                if searchMode == 'Nearest'
+                    curDiff = math.abs(valToFind - toLook)
+                    if na(minDiff)
+                        rtnTime := curBI.t
+                        minDiff := curDiff
+                        minDiff
+                    else
+                        if curDiff <= minDiff
+                            minDiff := curDiff
+                            rtnTime := curBI.t
+                            rtnTime
+                if searchMode == 'Higher'
+                    if toLook >= valToFind
+                        rtnTime := curBI.t
+                        break
+                if searchMode == 'Lower'
+                    if toLook <= valToFind
+                        rtnTime := curBI.t
+                        break
+    rtnTime
+
+renderSRObj(srObj sr) =>
+    if na(sr.info.breakTime) or showInvalidated
+        if na(sr.info.retestTimes)
+            sr.info.retestTimes := array.new<int>()
+        sr.rendered := true
+        int endTime = nz(sr.info.breakTime, time + curTFMS * labelOffsetBars)
+        extendType = extend.none
+        if na(sr.info.breakTime)
+            extendType := extend.right
+            extendType
+        if expandZones == 'Only Valid' and na(sr.info.breakTime)
+            extendType := extend.both
+            extendType
+        else if expandZones == 'All'
+            extendType := extend.both
+            endTime := time + curTFMS * labelOffsetBars
+            endTime
+        string labelTitle = formatTimeframeString(sr.info.timeframeStr)
+        if not na(sr.combinedTimeframeStr)
+            labelTitle := sr.combinedTimeframeStr
+            labelTitle
+        labelTitle := labelTitle + ' | ' + str.tostring(sr.info.price, format.mintick)
+        sr.srBox := box.new(sr.info.startTime, sr.info.price + atr * zoneSizeATR, endTime, sr.info.price - atr * zoneSizeATR, xloc = xloc.bar_time, bgcolor = sr.info.srType == 'Resistance' ? resistance_color : support_color, border_color = na, text = labelTitle, text_color = textColor, text_size = size.normal)
+        box.set_extend(sr.srBox, extendType)
+        if showBreaks and not na(sr.info.breakTime)
+            sr.breakLabel := label.new(sr.info.breakTime, sr.info.price, 'B', yloc = sr.info.srType == 'Resistance' ? yloc.belowbar : yloc.abovebar, style = sr.info.srType == 'Resistance' ? label.style_label_up : label.style_label_down, color = breakColor, textcolor = color.new(textColor, 0), xloc = xloc.bar_time, size = size.small)
+            if time - curTFMS <= sr.info.breakTime and time + curTFMS >= sr.info.breakTime and enable_sr_break_retest_alerts
+                alerts.put('Break', true)
+        if showRetests and sr.info.retestTimes.size() > 0
+            for i = sr.info.retestTimes.size() - 1 to 0 by 1
+                int curRetestTime = sr.info.retestTimes.get(i)
+                bool cooldownOK = true
+                if sr.retestLabels.size() > 0
+                    label lastLabel = sr.retestLabels.get(0)
+                    if math.abs(lastLabel.get_x() - curRetestTime) < curTFMS * retestLabelCooldown
+                        cooldownOK := false
+                        cooldownOK
+                if cooldownOK and curRetestTime >= sr.info.startTime and (na(sr.info.breakTime) or curRetestTime < sr.info.breakTime)
+                    if time - curTFMS <= curRetestTime and time >= curRetestTime and enable_sr_break_retest_alerts
+                        alerts.put('Retest', true)
+                    sr.retestLabels.unshift(label.new(curRetestTime, sr.info.price, 'R', yloc = sr.info.srType == 'Resistance' ? yloc.abovebar : yloc.belowbar, style = sr.info.srType == 'Resistance' ? label.style_label_down : label.style_label_up, color = sr.info.srType == 'Resistance' ? resistance_color : support_color, textcolor = color.new(textColor, 0), xloc = xloc.bar_time, size = size.small))
+
+safeDeleteSRObj(srObj sr) =>
+    if sr.rendered
+        box.delete(sr.srBox)
+        label.delete(sr.breakLabel)
+        if sr.retestLabels.size() > 0
+            for i = 0 to sr.retestLabels.size() - 1 by 1
+                label curRetestLabel = sr.retestLabels.get(i)
+                label.delete(curRetestLabel)
+        sr.rendered := false
+        sr.rendered
+########The code is still under modification and testing; the full version will be released once it is stable.###########
