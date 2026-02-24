@@ -1,9 +1,3 @@
-
----
-
-# 🇺🇸 README (English Version, Ready to Use)
-
-```markdown
 # 🧠 Comprehensive Trading Indicator for TradingView
 ### All-in-One Chart Toolkit (Pine Script v6) | MA Group + Vegas + ZigZag + RSI Divergence + MTF S/R + Range Boxes + Alerts
 
